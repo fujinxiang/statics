@@ -4,7 +4,7 @@
 <head>
     <title>基于 Stream API 拉取 MP4 分片</title>
     <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
-    <script src="./p2p-media-loader-core.js?ts=6"></script>
+    <script src="./p2phttp/p2p-media-loader-core.js?ts=6"></script>
 </head>
 
 <body>
@@ -17,7 +17,7 @@
     </div>
 
     <video id="vrlive" autoplay muted></video>
-    <script src="./wsfile.js?ts=1"></script>
+    <script src="./p2phttp/wsfile.js?ts=1"></script>
 
     <script>
         function fetchFileSize(videoUrl) {
