@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>基于 Stream API 拉取 MP4 分片</title>
+    <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+    <script src="./p2p-media-loader-core.js?ts=6"></script>
+</head>
+
+<body>
+    <h1>
+        基于 Stream API 拉取 MP4 分片
+    </h1>
+    <div>
+        <input type="text" id="inputUrl" value="https://oss.fujinxiang.cn/videos/Guide.mp4" />
+        <button onclick="wsPlay()">播放视频</button>
+    </div>
+
+    <video id="vrlive" autoplay muted></video>
+    <script src="./wsfile.js?ts=1"></script>
+
+    <script>
+        function fetchFileSize(videoUrl) {
+            return new Promise((resolve, reject) => {
+                fetch(videoUrl, {
+                    mode: 'cors',
+                    headers: {
+                        method: 'HEAD',
+                    }
+                }).then(response => {
+                    const length = response.headers.get('Content-Length');
+                    resolve(length);
+                }).catch(reject);
+            })
+        }
+
+        function wsPlay() {
+            const url = document.querySelector('#inputUrl').value;
+            fetchFileSize(url).then(size => {
+                const f = new WSFile.File({ name: 'hos.mp4', size }, null, (start, end) => { return load(start, end, url) });
+                const vrlive = document.querySelector('#vrlive');
+                f.renderTo(vrlive);
+            })
+        }
+
+        let loader;
+        let fetching = {};
+        function initP2PLoader() {
+            const wtServer = getSearchQuery('wtServer') || 'wss://tracker.test.seewo.com'
+
+            const settings = { trackerAnnounce: [wtServer] }
+            loader = new p2pml.core.HybridLoader(settings);
+
+            loader.on(p2pml.core.Events.SegmentLoaded, function (segment, peerId) {
+                if (fetching[segment.id]) {
+                    const resolve = fetching[segment.id].resolve;
+                    const buffer = segment.data;
+                    resolve(new Uint8Array(buffer));
+
+                    if (peerId) {
+                        console.log("Loading from peerId", peerId, segment);
+                    } else {
+                        console.log('Loading from HTTP', segment);
+                    }
+
+                    delete fetching[segment.id];
+                }
+            });
+
+            loader.on(p2pml.core.Events.SegmentError, function (segment, error) {
+                if (fetching[segment.id]) {
+                    const resolve = fetching[segment.id].reject;
+                    reject(error);
+                    delete fetching[segment.id];
+                }
+
+                console.log("Loading failed", segment, error);
+            });
+
+            loader.on(p2pml.core.Events.PeerConnect, function (peer) {
+                console.log("PeerConnect", peer.id);
+            });
+        }
+
+        initP2PLoader();
+
+        function load(start, end, url) {
+            return new Promise((resolve, reject) => {
+                let segments = []
+                const streamSwarmId = url;
+                const id = `${url}-${start}-${end}`;
+                let priority = 1;
+
+                const segment = {
+                    id: id,
+                    url: url,
+                    masterSwarmId: url,
+                    masterManifestUri: url,
+                    sequence: id,
+                    range: `bytes=${start}-${end}`,
+                    priority: priority++,
+                };
+
+                segments.push(segment);
+                console.log('load segments', segments);
+
+                // TODO: 此处是因为 wsfile.js 内部可能会连续两次调用，导致前面的被打断
+                setTimeout(() => {
+                    loader.load(segments, streamSwarmId);
+                }, 20);
+
+                fetching[id] = { resolve, reject };
+            })
+        }
+
+        function getSearchQuery(variable) {
+            if (!variable)
+                return null;
+            var search = window.location.search;
+            var query = search.substring(1);
+            var vars = query.split('&');
+            var value = '';
+            for (var i = 0, len = vars.length; i < len; i++) {
+                var pair = vars[i].split('=');
+                if (pair[0] == variable) {
+                    value = pair[1];
+                    break;
+                }
+            }
+            return decodeURIComponent(value);
+        }
+    </script>
+</body>
+
+</html>
