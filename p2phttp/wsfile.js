@@ -13993,7 +13993,6 @@ emits 'stalled' once everything is written
                       },
                     };
 
-                    localforage.setItem("moov", trackMoov);
                     console.log('trackMoov', trackMoov);
 
                     this._tracks.push({
@@ -14359,7 +14358,6 @@ emits 'stalled' once everything is written
                       initFlushed: false,
                       onInitFlushed: null,
                     };
-                    localforage.setItem("ok_audio", trackData.init);
                     mediaSource.write(trackData.init, (err) => {
                       track.initFlushed = true;
                       if (track.onInitFlushed) {
