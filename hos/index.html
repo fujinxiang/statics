@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>录播机 WebSocket Demo</title>
+    <script src="https://unpkg.com/vue@3.2.33/dist/vue.global.prod.js"></script>
+    <script src="https://qn-store-pub-tx.seewo.com/u/statics/238ff97258b61c2b9579f8c643a1b8f2.js"></script>
+    <style>
+        #txtWsServer {
+            width: 600px;
+            font-size: 16px;
+            margin: 8px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <h1>
+            录播机 WebSocket Demo
+        </h1>
+
+        <div>
+            <input v-if="!connected" id="txtWsServer" type="text" value=""
+                placeholder="输入录播机提供的 WebSocket 地址，例如 wss://172.20.122.75:8054" />
+            <button onclick="connectWs()">{{connected ? '已连接' : '连接录播机'}}</button>
+        </div>
+
+
+        <div v-if="connected">
+            <button onclick="readFileList()">读取录播机文件列表</button>
+            <ul>
+                <li v-for="item in items">{{item.filepath}} <button @click="wsPlay(item)">播放视频</button></li>
+            </ul>
+        </div>
+
+        <div>
+            <video id="vrlive" autoplay width="800"></video>
+        </div>
+
+        <div>
+            <h2>Node 端简单的 WebSocket Server</h2>
+            <pre>
+                <code>
+const { WebSocketServer } = require("ws");
+const fs = require("fs");
+const fsPromises = fs.promises;
+const path = require("path");
+
+const wss = new WebSocketServer({ port: 3000 });
+
+wss.on("connection", function connection(ws) {
+    console.log("已连接");
+    ws.on("message", async (data) => {
+    const optStr = data.toString("utf-8");
+    console.log(optStr);
+
+    const opt = JSON.parse(optStr);
+    console.log(opt);
+
+    if (opt.type === "get_file_list") {
+        const msg = {
+        type: "file_list",
+        fileList: [
+            {
+            filepath: path.resolve(process.cwd(), "public/ok-线上回放视频.mp4"),
+            size: 957444907,
+            },
+            {
+            filepath: path.resolve(process.cwd(), "hos.mp4"),
+            size: 432090230,
+            },
+        ],
+        };
+        ws.send(JSON.stringify(msg));
+    } else if (opt.type === "get_file_buffer") {
+        const file = opt.filepath;
+        console.log(file);
+        const fh = await fsPromises.open(file, "r+");
+        // 先分配 Buffer 大小，否则默认为 16384  https://nodejs.org/api/fs.html#filehandlereadbuffer-offset-length-position
+        const buffer = Buffer.alloc(opt.length);
+        const result = await fh.read(buffer, {
+        offset: 0,
+        length: opt.length,
+        position: opt.start,
+        });
+        ws.send(result.buffer);
+        fh.close();
+    }
+    });
+
+    ws.send("something");
+});
+                </code>
+            </pre>
+
+            <video src="https://cdn.jsdelivr.net/gh/fujinxiang/statics/videos/hosws.mp4" controls width="800" />
+        </div>
+    </div>
+
+    <script>
+        const app = Vue.createApp({
+            data() {
+                return {
+                    connected: false,
+                    items: [],
+                };
+            },
+            methods: {
+                wsPlay({ filepath, size }) {
+                    const f = new WSFile.File({ name: 'demo.mp4', size }, null, (start, length) => { return readFileBuffer(start, length, filepath) });
+                    const vrlive = document.querySelector('#vrlive');
+                    f.renderTo(vrlive);
+                }
+            }
+        }).mount("#container");
+
+        let wsResolvs = [];
+        let webSocket;
+        function connectWs() {
+            const wsUrl = document.querySelector('#txtWsServer').value;
+            webSocket = new WebSocket(wsUrl);
+            webSocket.debug = true;
+
+            webSocket.onopen = function (openEvent) {
+                app.connected = true;
+                console.log(openEvent);
+            };
+
+            webSocket.onmessage = function (messageEvent) {
+                var wsMsg = messageEvent.data;
+                if (typeof wsMsg === 'string') {
+                    try {
+                        const msg = JSON.parse(wsMsg);
+                        if (msg.type === 'file_list') {
+                            app.items = msg.fileList;
+                        }
+                    } catch (error) {
+
+                    }
+                } else {
+                    var arrayBuffer;
+                    var fileReader = new FileReader();
+                    fileReader.onload = function (event) {
+                        arrayBuffer = event.target.result;
+                        var data = new Uint8Array(arrayBuffer);
+                        const resolve = wsResolvs.shift();
+                        resolve(data);
+                        console.log(data);
+                    };
+                    fileReader.readAsArrayBuffer(wsMsg);
+                }
+            }
+        }
+
+        function readFileList() {
+            const msg = {
+                type: 'get_file_list'
+            }
+            webSocket.send(JSON.stringify(msg));
+        }
+
+        function readFileBuffer(start, length, filepath) {
+            return new Promise((resolve, reject) => {
+                const msg = {
+                    type: 'get_file_buffer',
+                    start,
+                    length,
+                    filepath,
+                }
+                webSocket.send(JSON.stringify(msg));
+                wsResolvs.push(resolve);
+            })
+        }
+
+    </script>
+</body>
+
+</html>
