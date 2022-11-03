@@ -86,6 +86,11 @@ im.init(options)
               })
             );
             console.log("[IM] > getRoomMember", data, context);
+
+            Events.fire('display-name', {message:{
+              deviceName: 'Chrome',
+              displayName: userId,
+            }});
           },
         });
 

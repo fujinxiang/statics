@@ -1,100 +1,154 @@
 window.URL = window.URL || window.webkitURL;
 window.isRtcSupported = !!(window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection);
 
-// class ServerConnection {
+class ServerConnection {
 
-//     constructor() {
-//         this._connect();
-//         Events.on('beforeunload', e => this._disconnect());
-//         Events.on('pagehide', e => this._disconnect());
-//         document.addEventListener('visibilitychange', e => this._onVisibilityChange());
-//     }
+    constructor() {
+        // this._connect();
+        // Events.on('beforeunload', e => this._disconnect());
+        // Events.on('pagehide', e => this._disconnect());
+        // document.addEventListener('visibilitychange', e => this._onVisibilityChange());
+    }
 
-//     _connect() {
-//         clearTimeout(this._reconnectTimer);
-//         if (this._isConnected() || this._isConnecting()) return;
-//         const ws = new WebSocket(this._endpoint());
-//         ws.binaryType = 'arraybuffer';
-//         ws.onopen = e => console.log('WS: server connected');
-//         ws.onmessage = e => this._onMessage(e.data);
-//         ws.onclose = e => this._onDisconnect();
-//         ws.onerror = e => console.error(e);
-//         this._socket = ws;
-//     }
+    _connect() {
+        clearTimeout(this._reconnectTimer);
+        if (this._isConnected() || this._isConnecting()) return;
+        const ws = new WebSocket(this._endpoint() + "?peerid=" + this._peerId() + "&code=" + this._peerCode()+ "&roomid=" + this._roomId());
+        ws.binaryType = 'arraybuffer';
+        ws.onopen = e => console.log('WS: server connected');
+        ws.onmessage = e => this._onMessage(e.data);
+        ws.onclose = e => this._onDisconnect();
+        ws.onerror = e => console.error(e);
+        this._socket = ws;
+    }
 
-//     _onMessage(msg) {
-//         msg = JSON.parse(msg);
-//         console.log('WS:', msg);
-//         // switch (msg.type) {
-//         //     case 'peers':
-//         //         // Events.fire('peers', msg.peers);
-//         //         break;
-//         //     case 'peer-joined':
-//         //         // Events.fire('peer-joined', msg.peer);
-//         //         break;
-//         //     case 'peer-left':
-//         //         Events.fire('peer-left', msg.peerId);
-//         //         break;
-//         //     case 'signal':
-//         //         Events.fire('signal', msg);
-//         //         break;
-//         //     case 'ping':
-//         //         this.send({ type: 'pong' });
-//         //         break;
-//         //     case 'display-name':
-//         //         Events.fire('display-name', msg);
-//         //         break;
-//         //     default:
-//         //         console.error('WS: unkown message type', msg);
-//         // }
-//     }
+    _onMessage(msg) {
+        msg = JSON.parse(msg);
+        console.log('WS:', msg);
+        switch (msg.type) {
+            case 'peers':
+                // Events.fire('peers', msg.peers);
+                break;
+            case 'peer-joined':
+                // Events.fire('peer-joined', msg.peer);
+                break;
+            case 'peer-left':
+                Events.fire('peer-left', msg.peerId);
+                break;
+            case 'signal':
+                Events.fire('signal', msg);
+                break;
+            case 'ping':
+                this.send({ type: 'pong' });
+                break;
+            case 'display-name':
+                // Events.fire('display-name', msg);
+                break;
+            default:
+                console.error('WS: unkown message type', msg);
+        }
+    }
 
-//     send(message) {
-//         if (!this._isConnected()) return;
-//         this._socket.send(JSON.stringify(message));
-//     }
+    send(message) {
+        if (!this._isConnected()) return;
+        this._socket.send(JSON.stringify(message));
+    }
 
-//     _endpoint() {
-//         return 'ws://wsfile.test.seewo.com';
-//         return 'wss://hidden-cherry-8056.fly.dev/';
+    _peerId() {
+        let peerId = sessionStorage.getItem("peerId");
+        if (!peerId) {
+            peerId = '';
+            for (let ii = 0; ii < 32; ii += 1) {
+                switch (ii) {
+                    case 8:
+                    case 20:
+                        peerId += '-';
+                        peerId += (Math.random() * 16 | 0).toString(16);
+                        break;
+                    case 12:
+                        peerId += '-';
+                        peerId += '4';
+                        break;
+                    case 16:
+                        peerId += '-';
+                        peerId += (Math.random() * 4 | 8).toString(16);
+                        break;
+                    default:
+                        peerId += (Math.random() * 16 | 0).toString(16);
+                }
+            }
+            sessionStorage.setItem("peerId", peerId);
+        }
+        return peerId;
+    }
+    
+    _randomNum(length = 1) {
+        let numStr = '';
+        for (let i = 0; i < length; i++) {
+            numStr += Math.floor(Math.random() * 10);
+        }
+        return numStr;
+    }
+    
+    _peerCode() {
+        let peerCode = sessionStorage.getItem("peerCode");
+        if (!peerCode) {
+            peerCode = this._randomNum(4);
+            sessionStorage.setItem("peerCode", peerCode);
+        }
+        return peerCode;
+    }
+    
+    _roomId() {
+        let roomId = sessionStorage.getItem("roomId");
+        //if (!roomId) {
+        //    roomId = this._randomNum(6);
+        //    sessionStorage.setItem("roomId", roomId);
+        //}
+        return roomId;
+    }
 
-//         // hack to detect if deployment or development environment
-//         const protocol = location.protocol.startsWith('https') ? 'wss' : 'ws';
-//         const webrtc = window.isRtcSupported ? '/webrtc' : '/fallback';
-//         const url = protocol + '://' + location.host + location.pathname + 'server' + webrtc;
-//         return url;
-//     }
+    _endpoint() {
+        // hack to detect if deployment or development environment
+        // return 'wss://www.wulingate.com/server/webrtc';
+        const protocol = location.protocol.startsWith('https') ? 'wss' : 'ws';
+        const webrtc = window.isRtcSupported ? '/webrtc' : '/fallback';
+        const url = protocol + '://' + location.host + '/server' + webrtc;
+        //const url = protocol + '://' + location.host + location.pathname + 'server' + webrtc;
+        return url;
+    }
 
-//     _disconnect() {
-//         this.send({ type: 'disconnect' });
-//         this._socket.onclose = null;
-//         this._socket.close();
-//     }
+    _disconnect() {
+        this.send({ type: 'disconnect' });
+        this._socket.onclose = null;
+        this._socket.close();
+    }
 
-//     _onDisconnect() {
-//         console.log('WS: server disconnected');
-//         Events.fire('notify-user', 'Connection lost. Retry in 5 seconds...');
-//         clearTimeout(this._reconnectTimer);
-//         this._reconnectTimer = setTimeout(_ => this._connect(), 5000);
-//     }
+    _onDisconnect() {
+        console.log('WS: server disconnected');
+        Events.fire('notify-user', '连接断开，5秒后重试…');
+        clearTimeout(this._reconnectTimer);
+        this._reconnectTimer = setTimeout(_ => this._connect(), 5000);
+    }
 
-//     _onVisibilityChange() {
-//         if (document.hidden) return;
-//         this._connect();
-//     }
+    _onVisibilityChange() {
+        if (document.hidden) return;
+        this._connect();
+    }
 
-//     _isConnected() {
-//         return this._socket && this._socket.readyState === this._socket.OPEN;
-//     }
+    _isConnected() {
+        return this._socket && this._socket.readyState === this._socket.OPEN;
+    }
 
-//     _isConnecting() {
-//         return this._socket && this._socket.readyState === this._socket.CONNECTING;
-//     }
-// }
+    _isConnecting() {
+        return this._socket && this._socket.readyState === this._socket.CONNECTING;
+    }
+}
 
 class Peer {
 
-    constructor(peerId) {
+    constructor(serverConnection, peerId) {
+        this._server = serverConnection;
         this._peerId = peerId;
         this._filesQueue = [];
         this._busy = false;
@@ -188,7 +242,7 @@ class Peer {
     }
 
     _onChunkReceived(chunk) {
-        if(!chunk.byteLength) return;
+        if(!(chunk.byteLength || chunk.size)) return;
         
         this._digester.unchunk(chunk);
         const progress = this._digester.progress;
@@ -214,7 +268,7 @@ class Peer {
         this._reader = null;
         this._busy = false;
         this._dequeueFile();
-        Events.fire('notify-user', 'File transfer completed.');
+        Events.fire('notify-user', '文件传送完成');
     }
 
     sendText(text) {
@@ -230,8 +284,8 @@ class Peer {
 
 class RTCPeer extends Peer {
 
-    constructor(peerId) {
-        super(peerId);
+    constructor(serverConnection, peerId) {
+        super(serverConnection, peerId);
         if (!peerId) return; // we will listen for a caller
         this._connect(peerId, true);
     }
@@ -260,6 +314,7 @@ class RTCPeer extends Peer {
             ordered: true,
             reliable: true // Obsolete. See https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/reliable
         });
+        channel.binaryType = 'arraybuffer';
         channel.onopen = e => this._onChannelOpened(e);
         this._conn.createOffer().then(d => this._onDescription(d)).catch(e => this._onError(e));
     }
@@ -296,7 +351,6 @@ class RTCPeer extends Peer {
     _onChannelOpened(event) {
         console.log('RTC: channel opened with', this._peerId);
         const channel = event.channel || event.target;
-        channel.binaryType = 'arraybuffer';
         channel.onmessage = e => this._onMessage(e.data);
         channel.onclose = e => this._onChannelClosed();
         this._channel = channel;
@@ -341,6 +395,10 @@ class RTCPeer extends Peer {
     }
 
     _sendSignal(signal) {
+        signal.type = 'signal';
+        signal.to = this._peerId;
+        this._server.send(signal);
+
         im.sendSingleMessage({
             data:{
                 msg_body: signal,
@@ -367,8 +425,9 @@ class RTCPeer extends Peer {
 
 class PeersManager {
 
-    constructor() {
+    constructor(serverConnection) {
         this.peers = {};
+        this._server = serverConnection;
         Events.on('signal', e => this._onMessage(e.detail));
         Events.on('peers', e => this._onPeers(e.detail));
         Events.on('files-selected', e => this._onFilesSelected(e.detail));
@@ -378,7 +437,7 @@ class PeersManager {
 
     _onMessage(message) {
         if (!this.peers[message.sender]) {
-            this.peers[message.sender] = new RTCPeer();
+            this.peers[message.sender] = new RTCPeer(this._server);
         }
         this.peers[message.sender].onServerMessage(message);
     }
@@ -390,9 +449,9 @@ class PeersManager {
                 return;
             }
             if (window.isRtcSupported && peer.rtcSupported) {
-                this.peers[peer.id] = new RTCPeer(peer.id);
+                this.peers[peer.id] = new RTCPeer(this._server, peer.id);
             } else {
-                // this.peers[peer.id] = new WSPeer(peer.id);
+                this.peers[peer.id] = new WSPeer(this._server, peer.id);
             }
         })
     }
@@ -453,8 +512,7 @@ class FileChunker {
         this._offset += chunk.byteLength;
         this._partitionSize += chunk.byteLength;
         this._onChunk(chunk);
-        if (this.isFileEnd()) return;
-        if (this._isPartitionEnd()) {
+        if (this._isPartitionEnd() || this.isFileEnd()) {
             this._onPartitionEnd(this._offset);
             return;
         }
@@ -518,16 +576,12 @@ class Events {
     static on(type, callback) {
         return window.addEventListener(type, callback, false);
     }
-
-    static off(type, callback) {
-        return window.removeEventListener(type, callback, false);
-    }
 }
-
 
 RTCPeer.config = {
     'sdpSemantics': 'unified-plan',
-    'iceServers': [{
-        urls: 'stun:stun.l.google.com:19302'
-    }]
+    'iceServers': [
+    {urls: 'turn:zp.wulingate.com', username: 'hmzJ0OHZivkod703', credential: 'KDF04PBYD9xHAp0s' },
+    {urls: 'turn:om.wulingate.com', username: 'hmzJ0OHZivkod703', credential: 'KDF04PBYD9xHAp0s' }
+    ]
 }

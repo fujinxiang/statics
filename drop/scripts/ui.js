@@ -4,12 +4,37 @@ const isURL = text => /^((https?:\/\/|www)[^\s]+)/g.test(text.toLowerCase());
 window.isDownloadSupported = (typeof document.createElement('a').download !== 'undefined');
 window.isProductionEnvironment = !window.location.host.startsWith('localhost');
 window.iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+window.WeChat = /MicroMessenger|wxwork/.test(navigator.userAgent);
 
-// set display name
+// Browser compatibility alert. 
+if (window.WeChat){alert('微信内置浏览器不支持下载，请点右上角 ··· 在浏览器打开。');}
+if (!window.isRtcSupported){alert('当前浏览器不支持本网站功能，推荐使用 Chrome、Edge、FireFox、Safari。');}
+// If user language is not Chinese, show language switch button. Auto switch to English site.
+if (navigator.language.substr(0,2) != 'zh'){
+    $('language').removeAttribute('hidden');
+    if (document.referrer != 'https://www.wulingate.com/en/'){
+        window.location.href='https://www.wulingate.com/en/';
+    }
+}
+
+// set display name, room icon and tip text. 
 Events.on('display-name', e => {
     const me = e.detail.message;
-    const $displayName = $('displayName')
-    $displayName.textContent = 'You are known as ' + me.displayName;
+    const $displayName = $('displayName');
+    const $displayNote = $('displayNote');
+    if (sessionStorage.getItem("roomId")){
+        $displayName.textContent = '我是: ' + me.displayName + ' @ 房间: ' + me.room;
+        $displayNote.textContent = '可被同房间内所有人发现';
+        $('room').querySelector('svg use').setAttribute('xlink:href', '#exit');
+        $('room').title = '退出该房间';
+        $$('x-no-peers h2').textContent = '在其他设备上输入房间号以传送文件';
+    }else {
+        $displayName.textContent = '本设备代码为: ' + me.displayName;
+        $displayNote.textContent = '可被局域网内所有人发现';
+        $('room').querySelector('svg use').setAttribute('xlink:href', '#enter');
+        $('room').title = '加入或新建一个房间';
+        $$('x-no-peers h2').textContent = '在其他设备上打开本网站以传送文件';
+    }
     $displayName.title = me.deviceName;
 });
 
@@ -24,7 +49,7 @@ class PeersUI {
     }
 
     _onPeerJoined(peer) {
-        if ($(peer.id)) return; // peer already exists
+        if ($(peer.id) || (peer.id == sessionStorage.getItem("peerId"))) return; // peer already exists. prevent to show itself.
         const peerUI = new PeerUI(peer);
         $$('x-peers').appendChild(peerUI.$el);
         setTimeout(e => window.animateBackground(false), 1750); // Stop animation
@@ -74,7 +99,7 @@ class PeerUI {
 
     html() {
         return `
-            <label class="column center" title="Click to send files or right click to send a text">
+            <label class="column center" title="点击发送文件、右键发送消息">
                 <input type="file" multiple>
                 <x-icon shadow="1">
                     <svg class="icon"><use xlink:href="#"/></svg>
@@ -205,7 +230,6 @@ class PeerUI {
     }
 }
 
-
 class Dialog {
     constructor(id) {
         this.$el = $(id);
@@ -231,6 +255,7 @@ class ReceiveDialog extends Dialog {
         super('receiveDialog');
         Events.on('file-received', e => {
             this._nextFile(e.detail);
+            window.blop.play();
         });
         this._filesQueue = [];
     }
@@ -302,17 +327,106 @@ class ReceiveDialog extends Dialog {
         this._dequeueFile();
     }
 
-
     _autoDownload(){
         return !this.$el.querySelector('#autoDownload').checked
     }
 }
 
+class JoinRoomDialog extends Dialog {
+    constructor() {
+        super('joinRoomDialog');
+        $('room').addEventListener('click', e => this._joinExit(e));
+        this.$text = this.$el.querySelector('#roomInput');
+        const button = this.$el.querySelector('form');
+        button.addEventListener('submit', e => this._join(e));
+    }
+
+    _joinExit(e) {
+        e.preventDefault();
+        if (sessionStorage.getItem("roomId")) {
+            sessionStorage.removeItem("roomId");
+            location.reload();
+        }else {
+            this.show();
+        }
+    }
+
+    _join(e) {
+        e.preventDefault();
+        let inputNum = this.$text.value.replace(/\D/g,'');
+        if (inputNum.length >= 6) {
+            inputNum = inputNum.substring(0,6);
+            sessionStorage.setItem("roomId", inputNum);
+            location.reload();
+        }
+        else {
+            inputNum = new ServerConnection()._randomNum(6);
+            sessionStorage.setItem("roomId", inputNum);
+            location.reload();
+        }
+    }
+}
+
+class ReceivedMsgsDialog extends Dialog {
+    constructor() {
+        super('receivedMsgsDialog');
+        $('messages').addEventListener('click', e => this._showMsgs(e));
+        if (!$$('.MsgItem') && sessionStorage.getItem("messages")) {
+            let msgs = JSON.parse(sessionStorage.getItem("messages"));
+            for (let i=msgs.length-1; i >= 0; i--) {
+                this._updateMsgsBox(msgs[i]);
+            }
+        }
+    }
+
+    _showMsgs(e){
+        e.preventDefault();
+        this.show();
+    }
+
+    async _onCopy(e){
+        e.preventDefault();
+        await navigator.clipboard.writeText(e.target.closest('.MsgItem').querySelector('.MsgContent').textContent);
+        Events.fire('notify-user', '已复制到剪切板');
+    }
+
+    html() {
+        return `
+            <div class="MsgTextBox">
+                <div class="MsgContent"></div>
+            </div>
+            <a herf="#" class="copy center" title="复制到剪切板">
+                <svg>
+                    <use xlink:href="#icon-copy" />
+                </svg>
+            </a>`
+    }
+
+    _initMsgItem() {
+        const item = document.createElement('div');
+        item.className = 'MsgItem';
+        item.innerHTML = this.html();
+        this.$item = item;
+    }
+    
+    _updateMsgsBox(content) {
+        this._initMsgItem();
+        this.$item.querySelector(".MsgContent").textContent = content;
+        $('MsgsBox').prepend(this.$item);
+        let msgsItem = $('MsgsBox').querySelectorAll('.MsgItem');
+        if (msgsItem[20]) {$('MsgsBox').removeChild(msgsItem[20]);}
+        $('messages').removeAttribute('hidden');
+        let copyBtn = $('MsgsBox').querySelectorAll('.copy');
+        for (let i=0; i < copyBtn.length; i++) {
+            copyBtn[i].addEventListener("click", e => this._onCopy(e));
+        }
+    }
+}
 
 class SendTextDialog extends Dialog {
     constructor() {
         super('sendTextDialog');
-        Events.on('text-recipient', e => this._onRecipient(e.detail))
+        Events.on('text-recipient', e => this._onRecipient(e.detail));
         this.$text = this.$el.querySelector('#textInput');
         const button = this.$el.querySelector('form');
         button.addEventListener('submit', e => this._send(e));
@@ -344,6 +458,7 @@ class SendTextDialog extends Dialog {
             to: this._recipient,
             text: this.$text.innerText
         });
+        this.$text.innerText = "";
     }
 }
 
@@ -369,11 +484,25 @@ class ReceiveTextDialog extends Dialog {
             this.$text.textContent = text;
         }
         this.show();
+        window.blop.play();
+        let msgs = new Array();
+        let receivedMsgsDialog = new ReceivedMsgsDialog();
+        if (sessionStorage.getItem("messages")){
+            msgs = JSON.parse(sessionStorage.getItem("messages"));
+            msgs.unshift(text);
+            if (msgs[20]) { msgs.splice(20);}
+            sessionStorage.setItem("messages", JSON.stringify(msgs));
+            receivedMsgsDialog._updateMsgsBox(text);
+        } else {
+            msgs[0] = text;
+            sessionStorage.setItem("messages", JSON.stringify(msgs));
+            receivedMsgsDialog._updateMsgsBox(text);
+        }
     }
 
     async _onCopy() {
         await navigator.clipboard.writeText(this.$text.textContent);
-        Events.fire('notify-user', 'Copied to clipboard');
+        Events.fire('notify-user', '已复制到剪切板');
     }
 }
 
@@ -390,7 +519,6 @@ class Toast extends Dialog {
     }
 }
 
-
 class Notifications {
 
     constructor() {
@@ -401,24 +529,25 @@ class Notifications {
         if (Notification.permission !== 'granted') {
             this.$button = $('notification');
             this.$button.removeAttribute('hidden');
-            this.$button.addEventListener('click', e => this._requestPermission());
+            this.$button.addEventListener('click', e => this._requestPermission(e));
         }
         Events.on('text-received', e => this._messageNotification(e.detail.text));
         Events.on('file-received', e => this._downloadNotification(e.detail.name));
     }
 
-    _requestPermission() {
+    _requestPermission(e) {
+        e.preventDefault();
         Notification.requestPermission(permission => {
             if (permission !== 'granted') {
                 Events.fire('notify-user', Notifications.PERMISSION_ERROR || 'Error');
                 return;
             }
-            this._notify('Even more snappy sharing!');
+            this._notify('通知功能已启用');
             this.$button.setAttribute('hidden', 1);
         });
     }
 
-    _notify(message, body) {
+    _notify(message, body, closeTimeout = 20000) {
         const config = {
             body: body,
             icon: '/images/logo_transparent_128x128.png',
@@ -433,35 +562,27 @@ class Notifications {
         }
 
         // Notification is persistent on Android. We have to close it manually
-        const visibilitychangeHandler = () => {                             
-            if (document.visibilityState === 'visible') {    
-                notification.close();
-                Events.off('visibilitychange', visibilitychangeHandler);
-            }                                                       
-        };                                                                                
-        Events.on('visibilitychange', visibilitychangeHandler);
+        if (closeTimeout) {
+            setTimeout(_ => notification.close(), closeTimeout);
+        }
 
         return notification;
     }
 
     _messageNotification(message) {
-        if (document.visibilityState !== 'visible') {
-            if (isURL(message)) {
-                const notification = this._notify(message, 'Click to open link');
-                this._bind(notification, e => window.open(message, '_blank', null, true));
-            } else {
-                const notification = this._notify(message, 'Click to copy text');
-                this._bind(notification, e => this._copyText(message, notification));
-            }
+        if (isURL(message)) {
+            const notification = this._notify(message, '点击打开链接');
+            this._bind(notification, e => window.open(message, '_blank', null, true));
+        } else {
+            const notification = this._notify(message, '收到新消息（点击复制文本）');
+            this._bind(notification, e => this._copyText(message, notification)); //Only work with blink core desktop browsers, like Chrome, Edge. 
         }
     }
 
     _downloadNotification(message) {
-        if (document.visibilityState !== 'visible') {
-            const notification = this._notify(message, 'Click to download');
-            if (!window.isDownloadSupported) return;
-            this._bind(notification, e => this._download(notification));
-        }
+        const notification = this._notify(message, '点击下载');
+        if (!window.isDownloadSupported) return;
+        this._bind(notification, e => this._download(notification));
     }
 
     _download(notification) {
@@ -471,8 +592,7 @@ class Notifications {
 
     _copyText(message, notification) {
         notification.close();
-        if (!navigator.clipboard.writeText(message)) return;
-        this._notify('Copied text to clipboard');
+        newClipboard.writeText(message) ? this._notify('已复制到剪切板') : this._notify('复制失败，请返回网页复制。');
     }
 
     _bind(notification, handler) {
@@ -486,7 +606,6 @@ class Notifications {
     }
 }
 
-
 class NetworkStatusUI {
 
     constructor() {
@@ -496,11 +615,11 @@ class NetworkStatusUI {
     }
 
     _showOfflineMessage() {
-        Events.fire('notify-user', 'You are offline');
+        Events.fire('notify-user', '网络连接中断');
     }
 
     _showOnlineMessage() {
-        Events.fire('notify-user', 'You are back online');
+        Events.fire('notify-user', '网络连接恢复');
     }
 }
 
@@ -526,14 +645,15 @@ class WebShareTargetUI {
 
 class Snapdrop {
     constructor() {
-        // const server = new ServerConnection();
-        // const peers = new PeersManager(server);
-        const peers = new PeersManager();
+        const server = new ServerConnection();
+        const peers = new PeersManager(server);
         const peersUI = new PeersUI();
         Events.on('load', e => {
             const receiveDialog = new ReceiveDialog();
             const sendTextDialog = new SendTextDialog();
             const receiveTextDialog = new ReceiveTextDialog();
+            const joinRoomDialog = new JoinRoomDialog();
+            const receivedMsgsDialog = new ReceivedMsgsDialog();
             const toast = new Toast();
             const notifications = new Notifications();
             const networkStatusUI = new NetworkStatusUI();
@@ -544,10 +664,8 @@ class Snapdrop {
 
 const snapdrop = new Snapdrop();
 
-
-
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/service-worker.js')
+    navigator.serviceWorker.register('https://cdn.jsdelivr.net/gh/fujinxiang/statics/drop/service-worker.js')
         .then(serviceWorker => {
             console.log('Service Worker registered');
             window.serviceWorker = serviceWorker
@@ -574,8 +692,6 @@ Events.on('load', () => {
     style.width = '100%';
     style.position = 'absolute';
     style.zIndex = -1;
-    style.top = 0;
-    style.left = 0;
     let ctx = c.getContext('2d');
     let x0, y0, w, h, dw;
 
@@ -584,8 +700,8 @@ Events.on('load', () => {
         h = window.innerHeight;
         c.width = w;
         c.height = h;
-        let offset = h > 380 ? 100 : 65;
-        offset = h > 800 ? 116 : offset;
+        let offset = h > 420 ? 90 : 72;
+        offset = h > 800 ? 106 : offset;
         x0 = w / 2;
         y0 = h - offset;
         dw = Math.max(w, h, 1000) / 13;
@@ -631,7 +747,10 @@ Events.on('load', () => {
 });
 
 Notifications.PERMISSION_ERROR = `
-Notifications permission has been blocked
-as the user has dismissed the permission prompt several times.
-This can be reset in Page Info
-which can be accessed by clicking the lock icon next to the URL.`;
+因用户拒绝授权，通知功能被禁用，您可点击网址栏左侧的小锁图标修改通知权限。`;
+
+document.body.onclick = e => { // safari hack to fix audio
+    document.body.onclick = null;
+    if (!(/.*Version.*Safari.*/.test(navigator.userAgent))) return;
+    blop.play();
+}
