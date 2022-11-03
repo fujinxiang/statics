@@ -664,26 +664,6 @@ class Snapdrop {
 
 const snapdrop = new Snapdrop();
 
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./service-worker.js')
-        .then(serviceWorker => {
-            console.log('Service Worker registered');
-            window.serviceWorker = serviceWorker
-        });
-}
-
-window.addEventListener('beforeinstallprompt', e => {
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-        // don't display install banner when installed
-        return e.preventDefault();
-    } else {
-        const btn = document.querySelector('#install')
-        btn.hidden = false;
-        btn.onclick = _ => e.prompt();
-        return e.preventDefault();
-    }
-});
-
 // Background Animation
 Events.on('load', () => {
     let c = document.createElement('canvas');
