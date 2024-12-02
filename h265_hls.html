@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>H265-HLS</title>
+    <script src="./js/hls.js"></script>
+</head>
+
+<body>
+    <video id="video"></video>
+    <script>
+        var video = document.getElementById('video');
+        var videoSrc = 'https://oss.fujinxiang.cn/files/h265_hls/output.m3u8';
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = videoSrc;
+        } else if (Hls.isSupported()) {
+            var hls = new Hls();
+            hls.loadSource(videoSrc);
+            hls.attachMedia(video);
+        }
+    </script>
+</body>
+</html>
