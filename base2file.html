@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base64转文件</title>
+    <style>
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #audioContainer {
+            margin-top: 20px;
+        }
+        #audioContainer audio {
+            width: 100%;
+        }
+        img{
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Base64转文件</h1>
+    <div class="container">
+        <textarea id="base64Input" placeholder="请输入Base64编码"></textarea>
+        <div class="input-group">
+            <input type="text" id="filenameInput" placeholder="请输入文件名（例如：abc.mp3）">
+            <button onclick="convertAndDownload()">转换</button>
+        </div>
+        <div id="audioContainer"></div>
+
+    </div>
+    <p>可以将音频 base64 转换为文件，<a href="https://www.aigei.com/music/cc" target="_blank">https://www.aigei.com/music/cc</a></p>
+    <p><img src="./images/audio-base64.png" alt="audio-base64" /></p>
+    <script>
+        function isAudioFile(filename) {
+            const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac', '.webm', '.opus'];
+            const lowerFilename = filename.toLowerCase();
+            return audioExtensions.some(ext => lowerFilename.endsWith(ext));
+        }
+        
+        function convertAndDownload() {
+            const base64 = document.getElementById('base64Input').value.trim();
+            const filename = document.getElementById('filenameInput').value.trim();
+            
+            if (!base64) {
+                alert('请输入Base64编码');
+                return;
+            }
+            
+            if (!filename) {
+                alert('请输入文件名');
+                return;
+            }
+            
+            try {
+                let base64Data = base64;
+                if (base64.includes(',')) {
+                    base64Data = base64.split(',')[1];
+                }
+                
+                const binaryString = atob(base64Data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                
+                const blob = new Blob([bytes]);
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                if (isAudioFile(filename)) {
+                    const audioContainer = document.getElementById('audioContainer');
+                    audioContainer.innerHTML = '';
+                    const audio = document.createElement('audio');
+                    audio.src = url;
+                    audio.controls = true;
+                    audio.autoplay = true;
+                    audioContainer.appendChild(audio);
+                } else {
+                    URL.revokeObjectURL(url);
+                }
+            } catch (error) {
+                alert('转换失败：' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
+
