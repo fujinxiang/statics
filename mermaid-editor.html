@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermaid 编辑器</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs" type="module"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: #f5f5f5;
+        }
+        
+        .header {
+            height: 32px;
+            background: white;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+        }
+        
+        .title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .download-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .download-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        .download-btn:hover {
+            background: #218838;
+        }
+        
+        .download-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .toggle-links {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .toggle-link {
+            color: #007bff;
+            text-decoration: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .toggle-link:hover {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .toggle-link.active {
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .container {
+            flex: 1;
+            display: flex;
+            height: calc(100vh - 32px);
+        }
+        
+        .editor-panel, .preview-panel {
+            flex: 1;
+            background: white;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .preview-panel {
+            border-right: none;
+        }
+        
+        #mermaidEditor, #mermaidEditorSingle {
+            flex: 1;
+            border: none;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+        }
+        
+        #mermaidPreview, #mermaidPreviewSingle {
+            flex: 1;
+            padding: 15px;
+            overflow: auto;
+            background: white;
+        }
+        
+        .single-view {
+            display: none;
+            flex-direction: column;
+            height: calc(100vh - 32px);
+            background: white;
+        }
+        
+        .single-view.active {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">Mermaid</div>
+        <div class="header-controls">
+            <div class="download-buttons">
+                <button id="downloadJpg" class="download-btn">JPG</button>
+                <button id="downloadSvg" class="download-btn">SVG</button>
+            </div>
+            <div class="toggle-links">
+                <a href="#" class="toggle-link active" data-mode="split">分屏</a>
+                <a href="#" class="toggle-link" data-mode="edit">编辑</a>
+                <a href="#" class="toggle-link" data-mode="preview">预览</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分屏模式 -->
+    <div id="splitView" class="container">
+        <div class="editor-panel">
+            <textarea id="mermaidEditor" placeholder="在这里输入 Mermaid 语法..."></textarea>
+        </div>
+        
+        <div class="preview-panel">
+            <div id="mermaidPreview"></div>
+        </div>
+    </div>
+
+    <!-- 仅编辑模式 -->
+    <div id="editView" class="single-view">
+        <textarea id="mermaidEditorSingle" placeholder="在这里输入 Mermaid 语法..."></textarea>
+    </div>
+
+    <!-- 仅预览模式 -->
+    <div id="previewView" class="single-view">
+        <div id="mermaidPreviewSingle"></div>
+    </div>
+
+    <script type="module">
+        // 导入 Mermaid v11
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+        
+        // 检查依赖
+        console.log('Mermaid v11 导入成功');
+        console.log('Mermaid 对象:', mermaid);
+        
+        // 初始化 Mermaid
+        console.log('正在初始化 Mermaid...');
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose',
+            // 流程图配置 - 核心配置，增加节点间距防止重叠
+            flowchart: {
+                useMaxWidth: false,   // 禁用自动缩放，使用自然尺寸
+                htmlLabels: true,
+                nodeSpacing: 80,      // 同级节点横向间距，增加以防止重叠
+                rankSpacing: 80,      // 不同层级纵向间距，增加以防止重叠
+                padding: 20,          // 节点内部填充
+                diagramPadding: 30,   // 图表整体内边距
+                wrappingWidth: 250    // 文字换行宽度，增加可读性
+            },
+            // 序列图配置
+            sequence: {
+                useMaxWidth: false,
+                wrap: true,
+                diagramMarginX: 50,
+                diagramMarginY: 30,
+                actorMargin: 80,
+                messageMargin: 50
+            },
+            // 甘特图配置 - 特别优化间距
+            gantt: {
+                useMaxWidth: false,
+                titleTopMargin: 25,
+                barHeight: 20,
+                barGap: 6,            // 条形图之间的间隙
+                fontFamily: 'Arial',
+                fontSize: 12,
+                gridLineStartPadding: 35,
+                leftPadding: 100,     // 增加左边距，给标签更多空间
+                rightPadding: 100,
+                topPadding: 50,
+                bottomPadding: 50
+            },
+            // 类图配置
+            class: {
+                useMaxWidth: false,
+                nodeSpacing: 80,
+                rankSpacing: 80,
+                diagramPadding: 30
+            },
+            // 状态图配置
+            state: {
+                useMaxWidth: false,
+                nodeSpacing: 80,
+                rankSpacing: 80,
+                padding: 20
+            },
+            // ER图配置
+            er: {
+                useMaxWidth: false,
+                nodeSpacing: 140,
+                rankSpacing: 140,
+                diagramPadding: 30,
+                minEntityWidth: 120,
+                minEntityHeight: 90
+            },
+            // 用户旅程图配置
+            journey: {
+                useMaxWidth: false,
+                diagramMarginX: 50,
+                diagramMarginY: 30
+            },
+            // 时间线配置
+            timeline: {
+                useMaxWidth: false,
+                diagramMarginX: 50,
+                diagramMarginY: 30
+            },
+            // 饼图配置
+            pie: {
+                useMaxWidth: false
+            },
+            // 象限图配置
+            quadrantChart: {
+                useMaxWidth: false
+            },
+            // XY图表配置
+            xyChart: {
+                useMaxWidth: false
+            },
+            // 思维导图配置
+            mindmap: {
+                useMaxWidth: false,
+                padding: 20,
+                maxNodeWidth: 300
+            }
+        });
+        console.log('Mermaid 初始化完成，已配置增强间距以防止重叠');
+
+        let currentMode = 'split';
+        const editor = document.getElementById('mermaidEditor');
+        const editorSingle = document.getElementById('mermaidEditorSingle');
+        const preview = document.getElementById('mermaidPreview');
+        const previewSingle = document.getElementById('mermaidPreviewSingle');
+
+        // 缓存相关配置
+        const CACHE_KEY = 'mermaid_editor_content';
+        
+        // 保存到localStorage
+        function saveToCache(content) {
+            try {
+                localStorage.setItem(CACHE_KEY, content);
+                console.log('内容已保存到缓存');
+            } catch (error) {
+                console.error('保存到缓存失败:', error);
+            }
+        }
+        
+        // 从localStorage读取
+        function loadFromCache() {
+            try {
+                const cached = localStorage.getItem(CACHE_KEY);
+                if (cached) {
+                    console.log('从缓存加载内容，长度:', cached.length);
+                    return cached;
+                }
+            } catch (error) {
+                console.error('从缓存读取失败:', error);
+            }
+            return null;
+        }
+        
+        // 初始化编辑器内容
+        function initializeEditorContent() {
+            const defaultContent = `graph TD
+    A[开始] --> B{是否满足条件?}
+    B -->|是| C[执行操作]
+    B -->|否| D[跳过]
+    C --> E[结束]
+    D --> E`;
+            
+            const cachedContent = loadFromCache();
+            const content = cachedContent || defaultContent;
+            
+            editor.value = content;
+            editorSingle.value = content;
+            
+            if (cachedContent) {
+                console.log('使用缓存内容初始化编辑器');
+            } else {
+                console.log('使用默认内容初始化编辑器');
+            }
+        }
+        
+        // 获取当前活跃的预览容器
+        function getCurrentPreviewContainer() {
+            if (currentMode === 'split') {
+                return preview;
+            } else if (currentMode === 'preview') {
+                return previewSingle;
+            }
+            return null;
+        }
+        
+        // 下载SVG
+        function downloadSVG() {
+            console.log('开始下载SVG...');
+            const previewContainer = getCurrentPreviewContainer();
+            
+            if (!previewContainer) {
+                alert('请先切换到包含预览的模式');
+                return;
+            }
+            
+            const svgElement = previewContainer.querySelector('svg');
+            if (!svgElement) {
+                alert('没有找到可下载的图表，请先生成图表');
+                return;
+            }
+            
+            try {
+                // 克隆SVG元素
+                const clonedSvg = svgElement.cloneNode(true);
+                
+                // 添加XML声明和SVG命名空间
+                const svgData = new XMLSerializer().serializeToString(clonedSvg);
+                const svgBlob = new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + svgData], {
+                    type: 'image/svg+xml;charset=utf-8'
+                });
+                
+                // 创建下载链接
+                const url = URL.createObjectURL(svgBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `mermaid-diagram-${Date.now()}.svg`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                console.log('SVG下载成功');
+            } catch (error) {
+                console.error('SVG下载失败:', error);
+                alert('SVG下载失败: ' + error.message);
+            }
+        }
+        
+        // 下载JPG
+        function downloadJPG() {
+            console.log('开始下载JPG...');
+            const previewContainer = getCurrentPreviewContainer();
+            
+            if (!previewContainer) {
+                alert('请先切换到包含预览的模式');
+                return;
+            }
+            
+            const svgElement = previewContainer.querySelector('svg');
+            if (!svgElement) {
+                alert('没有找到可下载的图表，请先生成图表');
+                return;
+            }
+            
+            try {
+                // 创建canvas
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // 获取SVG尺寸
+                const svgRect = svgElement.getBoundingClientRect();
+                const svgWidth = svgElement.viewBox.baseVal.width || svgRect.width;
+                const svgHeight = svgElement.viewBox.baseVal.height || svgRect.height;
+                
+                // 设置canvas尺寸，使用2倍分辨率提高清晰度
+                const scale = 2;
+                canvas.width = svgWidth * scale;
+                canvas.height = svgHeight * scale;
+                
+                // 设置白色背景
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 创建Image对象
+                const img = new Image();
+                img.onload = function() {
+                    // 绘制图像到canvas
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    // 转换为JPG并下载
+                    canvas.toBlob(function(blob) {
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `mermaid-diagram-${Date.now()}.jpg`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+                        
+                        console.log('JPG下载成功');
+                    }, 'image/jpeg', 0.95);
+                };
+                
+                img.onerror = function() {
+                    console.error('图像加载失败');
+                    alert('JPG转换失败：图像加载错误');
+                };
+                
+                // 将SVG转换为Data URL
+                const clonedSvg = svgElement.cloneNode(true);
+                const svgData = new XMLSerializer().serializeToString(clonedSvg);
+                const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+                
+                img.src = svgDataUrl;
+                
+            } catch (error) {
+                console.error('JPG下载失败:', error);
+                alert('JPG下载失败: ' + error.message);
+            }
+        }
+
+        // 渲染 Mermaid 图表
+        async function renderMermaid(code, targetElement) {
+            console.log('开始渲染 Mermaid 图表...');
+            console.log('输入代码:', code);
+            console.log('目标元素:', targetElement);
+            
+            if (!code.trim()) {
+                console.log('代码为空，显示提示信息');
+                targetElement.innerHTML = '<div style="color: #999; text-align: center; padding: 50px;">请输入 Mermaid 代码</div>';
+                return;
+            }
+
+            try {
+                // 清除之前的内容
+                console.log('清除目标元素之前的内容');
+                targetElement.innerHTML = '';
+                
+                // 使用 Mermaid v11 的 render 方法
+                const graphId = 'mermaid-graph-' + Date.now();
+                console.log('生成图表ID:', graphId);
+                
+                // 使用 mermaid.render 方法 (v11 API)
+                const { svg } = await mermaid.render(graphId, code);
+                console.log('渲染成功，SVG 长度:', svg.length);
+                targetElement.innerHTML = svg;
+                
+            } catch (error) {
+                console.error('Mermaid 渲染错误:', error);
+                console.error('错误详情:', error.message);
+                console.error('错误堆栈:', error.stack);
+                targetElement.innerHTML = '<div style="color: #e74c3c; padding: 20px; border: 1px solid #e74c3c; border-radius: 4px;">语法错误：<br>' + error.message + '<br><br>原始代码：<pre style="white-space: pre-wrap; margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px;">' + code + '</pre></div>';
+            }
+        }
+
+        // 获取当前活跃的编辑器内容
+        function getCurrentEditorContent() {
+            let content;
+            if (currentMode === 'split' || currentMode === 'preview') {
+                content = editor.value;
+            } else {
+                content = editorSingle.value;
+            }
+            console.log('获取当前编辑器内容:', content.substring(0, 50) + (content.length > 50 ? '...' : ''));
+            console.log('当前模式:', currentMode);
+            return content;
+        }
+
+        // 同步编辑器内容
+        function syncEditorContent(content) {
+            console.log('同步编辑器内容:', content.substring(0, 50) + (content.length > 50 ? '...' : ''));
+            editor.value = content;
+            editorSingle.value = content;
+            // 保存到缓存
+            saveToCache(content);
+        }
+
+        // 更新预览
+        async function updatePreview() {
+            console.log('开始更新预览...');
+            const code = getCurrentEditorContent();
+            console.log('准备渲染的代码长度:', code.length);
+            
+            if (currentMode === 'split') {
+                console.log('分屏模式 - 渲染到主预览区域');
+                await renderMermaid(code, preview);
+            } else if (currentMode === 'preview') {
+                console.log('预览模式 - 渲染到单独预览区域');
+                await renderMermaid(code, previewSingle);
+            } else {
+                console.log('编辑模式 - 跳过预览更新');
+            }
+        }
+
+        // 切换模式
+        async function switchMode(mode) {
+            console.log('切换模式:', currentMode, '->', mode);
+            currentMode = mode;
+            
+            // 同步编辑器内容
+            const content = getCurrentEditorContent();
+            syncEditorContent(content);
+            
+            // 更新UI
+            console.log('更新UI状态...');
+            document.querySelectorAll('.toggle-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.mode === mode) {
+                    link.classList.add('active');
+                    console.log('激活按钮:', link.textContent);
+                }
+            });
+
+            // 显示/隐藏面板
+            console.log('切换面板显示状态...');
+            document.getElementById('splitView').style.display = mode === 'split' ? 'flex' : 'none';
+            document.getElementById('editView').className = mode === 'edit' ? 'single-view active' : 'single-view';
+            document.getElementById('previewView').className = mode === 'preview' ? 'single-view active' : 'single-view';
+            
+            console.log('面板状态更新完成，准备更新预览...');
+            // 更新预览
+            setTimeout(async () => {
+                console.log('延迟更新预览...');
+                await updatePreview();
+            }, 100);
+        }
+
+        // 事件监听
+        console.log('绑定事件监听器...');
+        
+        // 下载按钮事件
+        document.getElementById('downloadSvg').addEventListener('click', downloadSVG);
+        document.getElementById('downloadJpg').addEventListener('click', downloadJPG);
+        
+        document.querySelectorAll('.toggle-link').forEach(link => {
+            link.addEventListener('click', async (e) => {
+                e.preventDefault();
+                console.log('用户点击切换按钮:', link.textContent, '模式:', link.dataset.mode);
+                await switchMode(link.dataset.mode);
+            });
+        });
+
+        // 编辑器输入监听
+        editor.addEventListener('input', async () => {
+            console.log('主编辑器内容变化');
+            const content = editor.value;
+            syncEditorContent(content);
+            await updatePreview();
+        });
+
+        editorSingle.addEventListener('input', async () => {
+            console.log('单独编辑器内容变化');
+            const content = editorSingle.value;
+            syncEditorContent(content);
+            await updatePreview();
+        });
+
+        // 初始化
+        console.log('开始初始化页面...');
+        
+        // 初始化编辑器内容（从缓存或默认内容）
+        initializeEditorContent();
+        
+        console.log('页面加载完成，执行初始预览更新');
+        await updatePreview();
+    </script>
+</body>
+</html>
