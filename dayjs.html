@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day.js 日期计算</title>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 50px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        .container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        input {
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>日期计算器</h1>
+    <div class="container">
+        <!-- 左边输入框：默认是今天日期 -->
+        <input type="date" id="startDate" title="开始日期">
+        
+        <span>+</span>
+        
+        <!-- 中间输入框：天 -->
+        <input type="number" id="days" value="0" placeholder="天数" style="width: 80px;">
+        
+        <span>天 =</span>
+        
+        <!-- 右边输入框：计算结果 -->
+        <input type="text" id="resultDate" readonly placeholder="计算结果" title="结果日期">
+    </div>
+
+    <script>
+        // 获取元素
+        const startDateInput = document.getElementById('startDate');
+        const daysInput = document.getElementById('days');
+        const resultDateInput = document.getElementById('resultDate');
+
+        // 初始化左边输入框为今天
+        const today = dayjs().format('YYYY-MM-DD');
+        startDateInput.value = today;
+
+        // 计算函数
+        function calculate() {
+            const dateVal = startDateInput.value;
+            const daysVal = parseInt(daysInput.value);
+
+            if (dateVal && !isNaN(daysVal)) {
+                // 计算结果
+                const result = dayjs(dateVal).add(daysVal, 'day');
+                // 格式化输出
+                resultDateInput.value = result.format('YYYY-MM-DD');
+            } else {
+                resultDateInput.value = '';
+            }
+        }
+
+        // 监听输入
+        startDateInput.addEventListener('input', calculate);
+        daysInput.addEventListener('input', calculate);
+
+        // 初始运行一次
+        calculate();
+    </script>
+</body>
+</html>
